@@ -374,37 +374,104 @@ void gotToLocation(int targetLocation) {
   int dx = targetX - currX;
   int dy = targetY - currY;
 
-//-------------------------DELIVERY ACTION------------------------
+  Serial.print("Current location: ");
+  Serial.print("(");
+  Serial.print(currX);
+  Serial.print(",");
+  Serial.print(currY);
+  Serial.println(")");
 
+  if (dy > 0) {
+    Serial.print("Moving NORTH ");
+    Serial.print(dy);
+    Serial.println(" step(s)");
+    turnToDirection(NORTH);
+    moveSteps(-dy);
+  }
+
+  else if (dy < 0) {
+    Serial.print("Moving SOUTH ");
+    Serial.print(-dy);
+    Serial.println(" step(s)")
+    turnToDirection(SOUTH);
+    moveSteps(-dy);
+  }
+    
+  if (dx > 0) {
+    Serial.print("Moving EAST ");
+    Serial.print(dx);
+    Serial.println(" step(s)");
+    turnToDirection(EAST);
+    moveSteps(dx);
+  }
+
+  else if (dx < 0) {
+    Serial.print("Moving WEST ");
+    Serial.print(-dx);
+    Serial.println(" step(s)");
+    turnToDirection(WEST);
+    moveSteps(-dx);
+  }
+
+  currentLocation = targetLocation;
+
+  Serial.print("Arrived at intersection ");
+  Serial.println(currentLocation);
+}
+  
+//-------------------------DELIVERY ACTION------------------------
+void performDelivery() {
+  stopRobot();
+
+  Serial.print("Delivering at intersection ");
+  Serial.println(currentLocation);
+
+  delay(2000);
+
+  Serial.println("Delivery complete");
+}
 
 //--------------------------MAIN LOOP-----------------------------
 void loop () {
   checkForRequests();
+
   switch (currentState) {
     case IDLE:
-      stopRobot();
-      break;
+      if (queueSize > 0) {
+        int nextIndex = chooseNextRequest();
+        currentTarget = requestQueue[nextIndex].location;
+        removeRequest(nextIndex);
 
-    case MOVING_TO_TARGET:
-      followLineSimple();
+        Serial.print("Chosen next target: ");
+        Serial.println(currentTarget);
 
-      if (checkIntersectionEvent()){
-        stopRobot();
-        delay(150); // pause so the event is stable;
-        Serial.println("Handle target navigation here");
+        currentState = MOVING_TO_TARGET;
       }
       break;
 
+    case MOVING_TO_TARGET:
+      goToLocation(currentTarget);
+      currentState = DELIVERING;
+      break;
+
     case DELIVERING:
-      stopRobot();
+      performDelivery();
+
+      if (queueSize > 0) {
+        currentState = IDLE;
+      }
+      else {
+        currentState = RETURNING_HOME;
+      }
       break;
 
     case RETURNING_HOME:
-      followLineSimple();
-      if (checkIntersectionEvent()) {
-        Serial.println("Intersection while returning");
-      // eventually will have something to update current location and to decide next move
-      
+      if (currentLocation != 0){
+        Serial.println("Queue empty. Returning to hub.");
+        goToLocation(0);
+      }
+      currentTarget = -1;
+      currentState = IDLE;
+      break;
   }
-
 }
