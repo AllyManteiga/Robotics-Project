@@ -67,6 +67,38 @@ bool onIntersection = false;
 unsigned long deliveryStartTime = 0;
 
 //-------PRIORITY-----------------------------
+int getGridDistance(int fromLocation, int toLocation) {
+  int x1 = locations[fromLocation].x;
+  int y1 = locations[fromLocation].y;
+  int x2 = locations[toLocation].x;
+  int y2 = locations[toLocation].y;
+
+  return abs(x1 - x2_ + abs(y1 - y2);
+}
+
+int chooseNextRequest() {
+  int bestIndex = 0;
+  int bestDistance = getGridDistance(currentLocation, requestQueue[0].location);
+  unsigned long oldestTime = requestQueue[0].timeAdded;
+
+  for (int i = 1; i < queueSize; i++) {
+    int candidateLocation = requestQueue[i].location;
+    int candidateDistance = getGridDistance(currentLocation, candidateLocation);
+    unsigned long candidateTime = requestQueue[i].timeAdded;
+
+    if (candidateDistance < bestDistance) {
+      bestIndex = i;
+      bestDistance = candidateDistance;
+      oldestTime = candidateTime;
+    }
+
+    else if (candidateDistance = bestDistance && candidateTime < oldestTime) {
+      bestIndex = i;
+      oldestTime = candidateTime;
+    }
+  }
+  return bestIndex;
+}
 
 //-------------SETUP--------------------
 void setup() {
