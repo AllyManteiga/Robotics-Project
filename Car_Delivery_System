@@ -1,5 +1,9 @@
 //-------------DEFINES----------------------
 #include <Servo.h>
+#include <Dabble.h>
+
+#define TRIG_PIN // needs pin numbers 
+#define ECHO_PIN // needs pin numbers
 
 #define ENA 5
 #define ENB 6
@@ -18,7 +22,7 @@ Servo servo;
 
 //time durations robot needs to turn ms
 const int d90 = 632;
-const int d180 = 1275
+const int d180 = 1275;
 
 //---------------GRID COORDINATES----------------
 struct coordinate {
@@ -43,7 +47,7 @@ struct DeliveryRequest {
   unsigned long timeAdded;
 };
 
-DeliveryRequest requestQueue[10]
+DeliveryRequest requestQueue[10];
 int queueSize = 0;
 
 enum State {
@@ -88,6 +92,7 @@ void setup() {
   pinMode(LT_RIGHT, INPUT);
 
   Serial.println("Delivery robot started");
+}
 
 //--------------MOTOR FUNCTIONS-----------------
 void moveForward(int leftSpeed, int rightSpeed) {
@@ -213,15 +218,99 @@ void followLineSimple() {
 }
 
 //-------------------INTERSECTION DETECTION----------------------
+
+// helper functions: true means that sensor is currently on the black line
+bool leftOnLine() {
+  return digitalRead(LT_LEFT) == 0;
+}
+
+bool middleOnLine() {
+  return digitalRead(LT_MIDDL) == 0;
+}
+
+bool rightOnLine() {
+  return digitalRead(LT_RIGHT) == 0;
+}
+
+// returns true if robot is physically over an intersection
+// first version: all three sensors must see black
+bool detectIntersection() {
+  bool L = leftOnLine();
+  bool M = middleOnLine();
+  bool R = rightOnLine();
+
+  return (L && M && R);
+}
+
+// to see sensor values in Serial Monitor
+void printLineSensors() {
+  Serial.print("L: ");
+  Serial.print(digitalRead(LT_LEFT));
+  Serial.print("  M: ");
+  Serial.print(digitalRead(LT_MIDDL));
+  Serial.print("  R: ");
+  Serial.println(digitalRead(LT_RIGHT));
+}
+
+// this creates a one-time "event" when entering an intersection
+// it prevents the same intersection from being counted repeatedly
+bool checkIntersectionEvent() {
+  bool atIntersection = detectIntersection();
+
+  // robot has just arrived at a new intersection
+  if (atIntersection && !onIntersection) {
+    onIntersection = true;
+    passedIntersections++;
+
+    Serial.print("Intersection detected. Count = "); // visual assist
+    Serial.println(passedIntersections);
+
+    return true;
+  }
+
+  // robot has fully left the intersection area
+  if (!atIntersection && onIntersection) {
+    onIntersection = false;
+  }
+
+  return false;
+}
+
+
 //------------------NAVIGATION-----------------------------------
 
+
 //-------------------------DELIVERY ACTION------------------------
+
+
 //--------------------------MAIN LOOP-----------------------------
 void loop () {
   checkForRequests();
   switch (currentState) {
     case IDLE:
+      stopRobot();
+      break;
+
     case MOVING_TO_TARGET:
+      followLineSimple();
+
+      if (checkIntersectionEvent()){
+        stopRobot();
+        delay(150); // pause so the event is stable;
+        Serial.println("Handle target navigation here");
+      }
+      break;
+
     case DELIVERING:
+      stopRobot();
+      break;
+
     case RETURNING_HOME:
+      followLineSimple();
+      if (checkIntersectionEvent()) {
+        Serial.println("Intersection while returning");
+      // eventually will have something to update current location and to decide next move
+      
+  }
+
 }
