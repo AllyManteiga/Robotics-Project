@@ -199,10 +199,46 @@ void addRequest(int location) {
       Serial.print(location);
       Serial.println(" already in queue");
       return;
+    }
   }
+
+  if (currentState == MOVING_TO_TARGET && currentTarget == location) {
+    Serial.print("Already heading to intersection ");
+    Serial.println(location);
+    return;
+  }
+
+  requestQueue[queueSize].location = location;
+  requestQueue[queueSize].timeAdded = millis();
+  queueSize++;
+
+  Serial.print("Added request for intersection ");
+  Serial.println(location);
+
+  printQueue();
 }
 
+void removeRequest(int index) {
+  for (int i = index; i < queueSize - 1; i++) {
+    requestQueue[i] = requestQueue[i + 1];
+  }
+  queueSize--;
+}
 
+void printQueue() {
+  Serial.print("Queue: ");
+
+  if (queueSize == 0) {
+    Serial.println("empty");
+    return;
+  }
+
+  for (int i = 0; i < queueSize; i++) {
+    Serial.print(requestQueue[i].location);
+    Serial.print(" ");
+  }
+  Serial.println();
+}
 
 //-------------------DABBLE BUTTON INPUT------------------
 
