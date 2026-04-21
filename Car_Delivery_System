@@ -62,6 +62,8 @@ int passedIntersections = 0;
 bool onIntersection = false;
 unsigned long deliveryStartTime = 0;
 
+//-------PRIORITY-----------------------------
+
 //-------------SETUP--------------------
 void setup() {
   Serial.begin(9600);
@@ -142,7 +144,7 @@ void turn180() {
 
 //------------REQUEST QUEUE--------------------
 
-//-------PRIORITY-----------------------------
+
 
 //-------------------DABBLE BUTTON INPUT------------------
 
