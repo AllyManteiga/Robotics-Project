@@ -1,6 +1,5 @@
 //-------------DEFINES----------------------
 #include <Servo.h>
-// test
 
 #define ENA 5
 #define ENB 6
