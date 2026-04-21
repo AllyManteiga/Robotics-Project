@@ -30,6 +30,12 @@ struct coordinate {
   int y;
 };
 
+enum Direction {
+  NORTH,
+  EAST,
+  SOUTH,
+  WEST};
+
 coordinate locations[9] = {
   {0,0},//hub
   {1,0},//1
@@ -41,6 +47,8 @@ coordinate locations[9] = {
   {3,1},//7
   {4,1}//8
 };
+
+Direction currentDirection = NORTH;
 //-------------DELIVERY SYSTEM-----------------
 struct DeliveryRequest {
   int location;
@@ -308,9 +316,63 @@ bool checkIntersectionEvent() {
   return false;
 }
 
+//-------------------DIRECTION UPDATE---------------------------
+void updateDirectionAfterLeftTurn() {
+  if (currentDirection == NORTH) currentDirection = WEST;
+  else if (currentDirection == WEST) currentDirection = SOUTH;
+  else if (currentDirection == SOUTH) currentDirection = EAST;
+  else if (currentDirection == EAST) currentDirection = NORTH;
+}
+
+void updateDirectionAfterRightTurn() {
+  if (currentDirection == NORTH) currentDirection = EAST;
+  else if (currentDirection == EAST) currentDirection = SOUTH;
+  else if (currentDirection == SOUTH) currentDirection = WEST;
+  else if (currentDirection == WEST) currentDirection = NORTH;
+}
+
+void updateDirectionAfter180Turn() {
+  if (currentDirection == NORTH) currentDirection = SOUTH;
+  else if (currentDirection == SOUTH) currentDirection = NORTH;
+  else if (currentDirection == EAST) currentDirection = WEST;
+  else if (currentDirection == WEST) currentDirection = EAST;
+}
+
+void turnToDirection(Direction targetDirection) {
+  while (currentDirection != targetDirection) {
+    // always turn right until aligned
+    turnRight90();
+    updateDirectionAfterRightTurn();
+
+    Serial.print("Turned. Now facing: ");
+    Serial.println(currentDirection);
+  }
+}
+
+//---------------------STEP MOVEMENT----------------------------
+void moveSteps(int steps) {
+  passedIntersections = 0;
+  onIntersection = false;
+
+  while (passedIntersections < steps) {
+    followLineSimple();
+    updateIntersectionCount();
+  }
+
+  stopRobot();
+  delay(150)
+
 
 //------------------NAVIGATION-----------------------------------
+void gotToLocation(int targetLocation) {
+  int currX = locations[currentLocation].x;
+  int currY = locations[currentLocation].y;
 
+  int targetX = locations[targetLocation].x;
+  int targetY = locations[targetLocation].y;
+
+  int dx = targetX - currX;
+  int dy = targetY - currY;
 
 //-------------------------DELIVERY ACTION------------------------
 
