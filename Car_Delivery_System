@@ -306,7 +306,7 @@ void followLineSimple() {
   }
 }
 
-//-------------------INTERSECTION DETECTION----------------------
+//-------------------INTERSECTION DETECTION----------------------**WORKS
 
 // helper functions: true means that sensor is currently on the black line
 bool leftOnLine() {
