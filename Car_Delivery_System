@@ -81,7 +81,7 @@ int getGridDistance(int fromLocation, int toLocation) {
   int x2 = locations[toLocation].x;
   int y2 = locations[toLocation].y;
 
-  return abs(x1 - x2_ + abs(y1 - y2);
+  return abs(x1 - x2) + abs(y1 - y2);
 }
 
 int chooseNextRequest() {
