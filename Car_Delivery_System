@@ -193,7 +193,7 @@ void addRequest(int location) {
     Serial.println("Queue full");
     return;
   }
-  for (int i = 0; i < queueSize; i+++ {
+  for (int i = 0; i < queueSize; i+++) {
     if (requestQueue[i].location == location) {
       Serial.print("Intersection ");
       Serial.print(location);
