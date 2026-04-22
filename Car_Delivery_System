@@ -1,5 +1,4 @@
 //-------------DEFINES----------------------
-//hi
 #include <Servo.h>
 #include <Dabble.h>
 
