@@ -100,7 +100,7 @@ int chooseNextRequest() {
       oldestTime = candidateTime;
     }
 
-    else if (candidateDistance = bestDistance && candidateTime < oldestTime) {
+    else if (candidateDistance == bestDistance && candidateTime < oldestTime) {
       bestIndex = i;
       oldestTime = candidateTime;
     }
@@ -193,7 +193,7 @@ void addRequest(int location) {
     Serial.println("Queue full");
     return;
   }
-  for (int i = 0; i < queueSize; i+++) {
+  for (int i = 0; i < queueSize; i++) {
     if (requestQueue[i].location == location) {
       Serial.print("Intersection ");
       Serial.print(location);
@@ -405,11 +405,11 @@ void moveSteps(int steps) {
 
   while (passedIntersections < steps) {
     followLineSimple();
-    updateIntersectionCount();
+    updateIntersectionCount(); // checkIntersectionEvent() instead?
   }
 
   stopRobot();
-  delay(150)
+  delay(150);
 
 
 //------------------NAVIGATION-----------------------------------
@@ -435,13 +435,13 @@ void gotToLocation(int targetLocation) {
     Serial.print(dy);
     Serial.println(" step(s)");
     turnToDirection(NORTH);
-    moveSteps(-dy);
+    moveSteps(dy); // removed -dy
   }
 
   else if (dy < 0) {
     Serial.print("Moving SOUTH ");
     Serial.print(-dy);
-    Serial.println(" step(s)")
+    Serial.println(" step(s)");
     turnToDirection(SOUTH);
     moveSteps(-dy);
   }
