@@ -132,11 +132,11 @@ void followLineSimple() {
       turnRight(150, 150);
     }
     else {
-      stopRobot();
+      moveForward(100,100); //ADDED THIS, ROBOT KEEPS SEARCHING FOR LINE
     }
   }
   else {
-    stopRobot();
+    moveForward(100,100);  //ADDED THIS, ROBOT KEEPS SEARCHING FOR LINE
   }
 }
 
@@ -222,25 +222,30 @@ void turnLeftCommitted() {
   stopRobot();
   delay(150);
 
-  // move forward to clear the center of the intersection
+  //Move forward to clear the center of the intersection
   moveForward(150, 150);
   delay(250);
   stopRobot();
   delay(150);
 
-  // fully commit to the left turn
-  turnLeft(170, 170);
-  delay(850);   // tune this: increase if under-turning, decrease if over-turning
-  stopRobot();
-  delay(200);
+  //Keep turning until middle sensor finds black line
+  unsigned long startTime = millis();
 
-  // move forward to land on the new line
-  moveForward(150, 150);
-  delay(300);
+  while (!middleOnLine() && millis() - startTime < 1500) {
+    turnLeft(120, 120);
+  }
+
   stopRobot();
   delay(150);
 
+  // Small forward nudge to center onto the new path
+  moveForward(130, 130);
+  delay(150);
+  stopRobot();
+  delay(100);
+
   updateAfterLeftTurn();
+  lastTurn = 1;
   onIntersection = false;
 }
 
@@ -256,19 +261,30 @@ void turnRightCommitted() {
   stopRobot();
   delay(150);
 
-  // fully commit to the right turn
+  // start to turn right
   turnRight(170, 170);
-  delay(850);   // tune this
+  delay(600);  
   stopRobot();
-  delay(200);
+  delay(100);
 
-  // move forward to land on the new line
-  moveForward(150, 150);
-  delay(300);
+  //keep turning until middle sensor finds new line
+  unsigned long startTime = millis();
+
+  while (!middleOnLine() && millis() - startTime < 1500) {
+    turnRight(120, 120);
+  }
+
   stopRobot();
   delay(150);
 
+  // Small forward nudge to center onto the new path
+  moveForward(130, 130);
+  delay(150);
+  stopRobot();
+  delay(100);
+
   updateAfterRightTurn();
+  lastTurn = 2;
   onIntersection = false;
 }
 
@@ -279,16 +295,26 @@ void turnAroundCommitted() {
   delay(150);
 
   turnLeft(170, 170);
-  delay(1600);  // tune this for a 180 turn
+  delay(1200);
   stopRobot();
-  delay(200);
+  delay(100);
 
-  moveForward(150, 150);
-  delay(300);
+  unsigned long startTime = millis();
+
+  while (!middleOnLine() && millis() - startTime < 2000) {
+    turnLeft(120, 120);
+  }
+
   stopRobot();
   delay(150);
 
+  moveForward(130, 130);
+  delay(150);
+  stopRobot();
+  delay(100);
+
   updateAfter180Turn();
+  lastTurn = 1;
   onIntersection = false;
 }
 
@@ -353,8 +379,6 @@ void handleReachedIntersection() {
 
   turnToDirection(neededDirection);
 
-  // only clear the intersection separately if robot is going straight
-  // committed turns already clear the intersection and nudge onto the new path
   if (!turning) {
     clearIntersection();
   }
