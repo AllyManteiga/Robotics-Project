@@ -1,9 +1,11 @@
-//-------------DEFINES----------------------
+#define CUSTOM_SETTINGS
+#define INCLUDE_GAMEPAD_MODULE
+
 #include <Servo.h>
 #include <Dabble.h>
 
-#define TRIG_PIN // needs pin numbers 
-#define ECHO_PIN // needs pin numbers
+#define TRIG_PIN 12
+#define ECHO_PIN 13
 
 #define ENA 5
 #define ENB 6
@@ -16,16 +18,12 @@
 #define LT_MIDDL 4
 #define LT_LEFT 2
 
-int lastTurn = 0;
+#define MAX_QUEUE 8
 
 Servo servo;
+int lastTurn = 0;
 
-//time durations robot needs to turn ms
-const int d90 = 632;
-const int d180 = 1275;
-
-//---------------GRID COORDINATES----------------
-struct coordinate {
+struct Coordinate {
   int x;
   int y;
 };
@@ -34,84 +32,136 @@ enum Direction {
   NORTH,
   EAST,
   SOUTH,
-  WEST};
-
-coordinate locations[9] = {
-  {0,0},//hub
-  {1,0},//1
-  {2,0},//2
-  {3,0},//3
-  {4,0},//4
-  {1,1},//5
-  {2,1},//6
-  {3,1},//7
-  {4,1}//8
+  WEST
 };
 
-Direction currentDirection = NORTH;
-//-------------DELIVERY SYSTEM-----------------
-struct DeliveryRequest {
-  int location;
-  unsigned long timeAdded;
-};
-
-DeliveryRequest requestQueue[10];
-int queueSize = 0;
-
-enum State {
-  IDLE,
+enum RobotState {
+  ADD_DELIVERY,
   MOVING_TO_TARGET,
   DELIVERING,
-  RETURNING_HOME
+  RETURN_HOME,
 };
 
-State currentState = IDLE;
+RobotState currentState = ADD_DELIVERY;
 
-int currentTarget = -1;
-int currentLocation = 0;
-int passedIntersections = 0;
+Coordinate currentPos = {1, 0};   // home starts at (1,0)
+Coordinate homePos = {1, 0};
+Coordinate currentTarget;
+
+Direction currentDirection = EAST;
+
+Coordinate deliveryQueue[MAX_QUEUE];
+int queueSize = 0;
 
 bool onIntersection = false;
-unsigned long deliveryStartTime = 0;
+bool hasTarget = false;
 
-//-------PRIORITY-----------------------------
-int getGridDistance(int fromLocation, int toLocation) {
-  int x1 = locations[fromLocation].x;
-  int y1 = locations[fromLocation].y;
-  int x2 = locations[toLocation].x;
-  int y2 = locations[toLocation].y;
+// ---------------- QUEUE FUNCTIONS ----------------
+void printQueue() {
+  Serial.print("Queue: ");
 
-  return abs(x1 - x2) + abs(y1 - y2);
-}
-
-int chooseNextRequest() {
-  int bestIndex = 0;
-  int bestDistance = getGridDistance(currentLocation, requestQueue[0].location);
-  unsigned long oldestTime = requestQueue[0].timeAdded;
-
-  for (int i = 1; i < queueSize; i++) {
-    int candidateLocation = requestQueue[i].location;
-    int candidateDistance = getGridDistance(currentLocation, candidateLocation);
-    unsigned long candidateTime = requestQueue[i].timeAdded;
-
-    if (candidateDistance < bestDistance) {
-      bestIndex = i;
-      bestDistance = candidateDistance;
-      oldestTime = candidateTime;
-    }
-
-    else if (candidateDistance == bestDistance && candidateTime < oldestTime) {
-      bestIndex = i;
-      oldestTime = candidateTime;
-    }
+  if (queueSize == 0) {
+    Serial.println("empty");
+    return;
   }
-  return bestIndex;
+
+  for (int i = 0; i < queueSize; i++) {
+    Serial.print("(");
+    Serial.print(deliveryQueue[i].x);
+    Serial.print(",");
+    Serial.print(deliveryQueue[i].y);
+    Serial.print(") ");
+  }
+
+  Serial.println();
 }
 
-//-------------SETUP--------------------
+void enqueue(Coordinate coord) {
+  if (queueSize >= MAX_QUEUE) {
+    Serial.println("Queue FULL. Cannot add more than 8 deliveries.");
+    return;
+  }
+
+  deliveryQueue[queueSize] = coord;
+  queueSize++;
+
+  Serial.print("Added delivery: (");
+  Serial.print(coord.x);
+  Serial.print(",");
+  Serial.print(coord.y);
+  Serial.println(")");
+
+  printQueue();
+}
+
+Coordinate dequeue() {
+  Coordinate first = deliveryQueue[0];
+
+  for (int i = 0; i < queueSize - 1; i++) {
+    deliveryQueue[i] = deliveryQueue[i + 1];
+  }
+
+  queueSize--;
+  printQueue();
+
+  return first;
+}
+
+// ---------------- DABBLE INPUT ----------------
+void checkForQueueInput() {
+  Dabble.processInput();
+
+  if (GamePad.isDownPressed()) {
+    enqueue({2, 0});
+    delay(300);
+  }
+
+  if (GamePad.isLeftPressed()) {
+    enqueue({3, 0});
+    delay(300);
+  }
+
+  if (GamePad.isRightPressed()) {
+    enqueue({4, 0});
+    delay(300);
+  }
+
+  if (GamePad.isTrianglePressed()) {
+    enqueue({1, 1});
+    delay(300);
+  }
+
+  if (GamePad.isCirclePressed()) {
+    enqueue({2, 1});
+    delay(300);
+  }
+
+  if (GamePad.isCrossPressed()) {
+    enqueue({3, 1});
+    delay(300);
+  }
+
+  if (GamePad.isSquarePressed()) {
+    enqueue({4, 1});
+    delay(300);
+  }
+}
+
+bool startButtonPressed() {
+  Dabble.processInput();
+
+  if (GamePad.isUpPressed()) {
+    delay(300);
+    return true;
+  }
+
+  return false;
+}
+
+// ---------------- SETUP ----------------
 void setup() {
   Serial.begin(9600);
-  Dabble.begin(9600);
+  Dabble.begin(9600, 0, 1);
 
   servo.attach(PWM);
   servo.write(90);
@@ -131,10 +181,14 @@ void setup() {
   pinMode(LT_MIDDL, INPUT);
   pinMode(LT_RIGHT, INPUT);
 
-  Serial.println("Delivery robot started");
+  pinMode(13, OUTPUT); //LED
+  digitalWrite(13, LOW);
+
+  Serial.println("Robot started in ADD_DELIVERY state.");
+  Serial.println("Add deliveries, then press UP to start.");
 }
 
-//--------------MOTOR FUNCTIONS-----------------
+// ---------------- MOTOR FUNCTIONS ----------------
 void moveForward(int leftSpeed, int rightSpeed) {
   analogWrite(ENA, leftSpeed);
   analogWrite(ENB, rightSpeed);
@@ -169,111 +223,7 @@ void stopRobot() {
   digitalWrite(IN4, LOW);
 }
 
-void turnLeft90() {
-  turnLeft(150, 150);
-  delay(d90);
-  stopRobot();
-}
-
-void turnRight90() {
-  turnRight(150, 150);
-  delay(d90);
-  stopRobot();
-}
-
-void turn180() {
-  turnLeft(150, 150);
-  delay(d180);
-  stopRobot();
-}
-
-//------------REQUEST QUEUE--------------------
-void addRequest(int location) {
-  if(queueSize >= 10) {
-    Serial.println("Queue full");
-    return;
-  }
-  for (int i = 0; i < queueSize; i++) {
-    if (requestQueue[i].location == location) {
-      Serial.print("Intersection ");
-      Serial.print(location);
-      Serial.println(" already in queue");
-      return;
-    }
-  }
-
-  if (currentState == MOVING_TO_TARGET && currentTarget == location) {
-    Serial.print("Already heading to intersection ");
-    Serial.println(location);
-    return;
-  }
-
-  requestQueue[queueSize].location = location;
-  requestQueue[queueSize].timeAdded = millis();
-  queueSize++;
-
-  Serial.print("Added request for intersection ");
-  Serial.println(location);
-
-  printQueue();
-}
-
-void removeRequest(int index) {
-  for (int i = index; i < queueSize - 1; i++) {
-    requestQueue[i] = requestQueue[i + 1];
-  }
-  queueSize--;
-}
-
-void printQueue() {
-  Serial.print("Queue: ");
-
-  if (queueSize == 0) {
-    Serial.println("empty");
-    return;
-  }
-
-  for (int i = 0; i < queueSize; i++) {
-    Serial.print(requestQueue[i].location);
-    Serial.print(" ");
-  }
-  Serial.println();
-}
-
-//-------------------DABBLE BUTTON INPUT------------------
-
-//up = intersection 1
-//down = intersection 2
-//left = intersection 3
-//right = intersection 4
-//triangle = intersection 5
-//circle = intersection 6
-//cross = intersection 7
-//square = intersection 8
-
-void checkForRequests() {
-  Dabble.processInput();
-
-  bool upNow = GamePad.isUpPressed();
-  bool downNow = GamePad.isDownPressed();
-  bool leftNow = GamePad.isLeftPressed();
-  bool rightNow = GamePad.isRightPressed();
-  bool triangleNow = GamePad.isTrianglePressed();
-  bool circleNow = GamePad.isCirclePressed();
-  bool crossNow = GamePad.isCrossPressed();
-  bool squareNow = GamePad.isSquarePressed();
-
-  if (upNow) addRequest(1);
-  if (downNow) addRequest(2);
-  if (leftNow) addRequest(3);
-  if (rightNow) addRequest(4);
-  if (triangleNow) addRequest(5);
-  if (circleNow) addRequest(6);
-  if (crossNow) addRequest(7);
-  if (squareNow) addRequest(8);
-}
-
-//--------------------LINE FOLLOWING-----------------------
+// ---------------- LINE FOLLOWING ----------------
 void followLineSimple() {
   int L = digitalRead(LT_LEFT);
   int M = digitalRead(LT_MIDDL);
@@ -298,17 +248,15 @@ void followLineSimple() {
       turnRight(150, 150);
     }
     else {
-      stopRobot();
+      moveForward(100, 100);
     }
   }
   else {
-    stopRobot();
+    moveForward(100, 100);
   }
 }
 
-//-------------------INTERSECTION DETECTION----------------------**WORKS
-
-// helper functions: true means that sensor is currently on the black line
+// ---------------- SENSOR HELPERS ----------------
 bool leftOnLine() {
   return digitalRead(LT_LEFT) == 0;
 }
@@ -321,43 +269,18 @@ bool rightOnLine() {
   return digitalRead(LT_RIGHT) == 0;
 }
 
-// returns true if robot is physically over an intersection
-// first version: all three sensors must see black
 bool detectIntersection() {
-  bool L = leftOnLine();
-  bool M = middleOnLine();
-  bool R = rightOnLine();
-
-  return (L && M && R);
+  return leftOnLine() && middleOnLine() && rightOnLine();
 }
 
-// to see sensor values in Serial Monitor
-void printLineSensors() {
-  Serial.print("L: ");
-  Serial.print(digitalRead(LT_LEFT));
-  Serial.print("  M: ");
-  Serial.print(digitalRead(LT_MIDDL));
-  Serial.print("  R: ");
-  Serial.println(digitalRead(LT_RIGHT));
-}
-
-// this creates a one-time "event" when entering an intersection
-// it prevents the same intersection from being counted repeatedly
 bool checkIntersectionEvent() {
   bool atIntersection = detectIntersection();
 
-  // robot has just arrived at a new intersection
   if (atIntersection && !onIntersection) {
     onIntersection = true;
-    passedIntersections++;
-
-    Serial.print("Intersection detected. Count = "); // visual assist
-    Serial.println(passedIntersections);
-
     return true;
   }
 
-  // robot has fully left the intersection area
   if (!atIntersection && onIntersection) {
     onIntersection = false;
   }
@@ -365,162 +288,313 @@ bool checkIntersectionEvent() {
   return false;
 }
 
-//-------------------DIRECTION UPDATE---------------------------
-void updateDirectionAfterLeftTurn() {
+// ---------------- DIRECTION HELPERS ----------------
+void updateAfterLeftTurn() {
   if (currentDirection == NORTH) currentDirection = WEST;
   else if (currentDirection == WEST) currentDirection = SOUTH;
   else if (currentDirection == SOUTH) currentDirection = EAST;
   else if (currentDirection == EAST) currentDirection = NORTH;
 }
 
-void updateDirectionAfterRightTurn() {
+void updateAfterRightTurn() {
   if (currentDirection == NORTH) currentDirection = EAST;
   else if (currentDirection == EAST) currentDirection = SOUTH;
   else if (currentDirection == SOUTH) currentDirection = WEST;
   else if (currentDirection == WEST) currentDirection = NORTH;
 }
 
-void updateDirectionAfter180Turn() {
+void updateAfter180Turn() {
   if (currentDirection == NORTH) currentDirection = SOUTH;
   else if (currentDirection == SOUTH) currentDirection = NORTH;
   else if (currentDirection == EAST) currentDirection = WEST;
   else if (currentDirection == WEST) currentDirection = EAST;
 }
 
-void turnToDirection(Direction targetDirection) {
-  while (currentDirection != targetDirection) {
-    // always turn right until aligned
-    turnRight90();
-    updateDirectionAfterRightTurn();
-
-    Serial.print("Turned. Now facing: ");
-    Serial.println(currentDirection);
-  }
+Direction getNeededDirection(Coordinate from, Coordinate to) {
+  if (to.x > from.x) return EAST;
+  if (to.x < from.x) return WEST;
+  if (to.y > from.y) return NORTH;
+  return SOUTH;
 }
 
-//---------------------STEP MOVEMENT----------------------------
-void moveSteps(int steps) {
-  passedIntersections = 0;
-  onIntersection = false;
+bool sameCoordinate(Coordinate a, Coordinate b) {
+  return a.x == b.x && a.y == b.y;
+}
 
-  while (passedIntersections < steps) {
-    followLineSimple();
-    updateIntersectionCount(); // checkIntersectionEvent() instead?
+Coordinate getNextStepToward(Coordinate from, Coordinate to) {
+  Coordinate next = from;
+
+  if (to.x > from.x) next.x++;
+  else if (to.x < from.x) next.x--;
+  else if (to.y > from.y) next.y++;
+  else if (to.y < from.y) next.y--;
+
+  return next;
+}
+
+// ---------------- CLEAR INTERSECTION ----------------
+void clearIntersection() {
+  moveForward(150, 150);
+  delay(350);
+  stopRobot();
+  delay(150);
+
+  onIntersection = false;
+}
+
+// ---------------- COMMITTED TURNING ----------------
+void turnLeftCommitted() {
+  // Serial.println("Decision: committed left turn");
+
+  stopRobot();
+  delay(150);
+
+  moveForward(150, 150);
+  delay(350);
+  stopRobot();
+  delay(150);
+
+  turnLeft(180, 180);
+  delay(1800);
+  stopRobot();
+  delay(100);
+
+  unsigned long startTime = millis();
+
+  while (!middleOnLine() && millis() - startTime < 2000) {
+    turnLeft(120, 120);
   }
 
   stopRobot();
   delay(150);
 
+  moveForward(130, 130);
+  delay(150);
+  stopRobot();
+  delay(100);
 
-//------------------NAVIGATION-----------------------------------
-void gotToLocation(int targetLocation) {
-  int currX = locations[currentLocation].x;
-  int currY = locations[currentLocation].y;
+  updateAfterLeftTurn();
+  lastTurn = 1;
+  onIntersection = false;
+}
 
-  int targetX = locations[targetLocation].x;
-  int targetY = locations[targetLocation].y;
+void turnRightCommitted() {
+  // Serial.println("Decision: committed right turn");
 
-  int dx = targetX - currX;
-  int dy = targetY - currY;
+  stopRobot();
+  delay(150);
 
-  Serial.print("Current location: ");
-  Serial.print("(");
-  Serial.print(currX);
+  moveForward(150, 150);
+  delay(350);
+  stopRobot();
+  delay(150);
+
+  turnRight(180, 180);
+  delay(1800);
+  stopRobot();
+  delay(100);
+
+  unsigned long startTime = millis();
+
+  while (!middleOnLine() && millis() - startTime < 1500) {
+    turnRight(120, 120);
+  }
+
+  stopRobot();
+  delay(150);
+
+  moveForward(130, 130);
+  delay(150);
+  stopRobot();
+  delay(100);
+
+  updateAfterRightTurn();
+  lastTurn = 2;
+  onIntersection = false;
+}
+
+void turnAroundCommitted() {
+  // Serial.println("Decision: committed 180 turn");
+
+  stopRobot();
+  delay(150);
+
+  turnLeft(170, 170);
+  delay(3000);
+  stopRobot();
+  delay(100);
+
+  unsigned long startTime = millis();
+
+  while (!middleOnLine() && millis() - startTime < 1500) {
+    turnLeft(120, 120);
+  }
+
+  stopRobot();
+  delay(150);
+
+  moveForward(130, 130);
+  delay(150);
+  stopRobot();
+  delay(100);
+
+  updateAfter180Turn();
+  lastTurn = 1;
+  onIntersection = false;
+}
+
+void turnToDirection(Direction targetDirection) {
+  if (currentDirection == targetDirection) {
+    Serial.println("Decision: go straight");
+    return;
+  }
+
+  if ((currentDirection == EAST  && targetDirection == NORTH) ||
+      (currentDirection == NORTH && targetDirection == WEST)  ||
+      (currentDirection == WEST  && targetDirection == SOUTH) ||
+      (currentDirection == SOUTH && targetDirection == EAST)) {
+    turnLeftCommitted();
+    return;
+  }
+
+  if ((currentDirection == EAST  && targetDirection == SOUTH) ||
+      (currentDirection == SOUTH && targetDirection == WEST)  ||
+      (currentDirection == WEST  && targetDirection == NORTH) ||
+      (currentDirection == NORTH && targetDirection == EAST)) {
+    turnRightCommitted();
+    return;
+  }
+
+  turnAroundCommitted();
+}
+
+// ---------------- NAVIGATION HELPERS ----------------
+void prepareNextMovement() {
+  if (sameCoordinate(currentPos, currentTarget)) {
+    stopRobot();
+    return;
+  }
+
+  Coordinate nextStep = getNextStepToward(currentPos, currentTarget);
+
+  Serial.print("Next step: (");
+  Serial.print(nextStep.x);
   Serial.print(",");
-  Serial.print(currY);
+  Serial.print(nextStep.y);
   Serial.println(")");
 
-  if (dy > 0) {
-    Serial.print("Moving NORTH ");
-    Serial.print(dy);
-    Serial.println(" step(s)");
-    turnToDirection(NORTH);
-    moveSteps(dy); // removed -dy
-  }
+  Direction neededDirection = getNeededDirection(currentPos, nextStep);
 
-  else if (dy < 0) {
-    Serial.print("Moving SOUTH ");
-    Serial.print(-dy);
-    Serial.println(" step(s)");
-    turnToDirection(SOUTH);
-    moveSteps(-dy);
-  }
-    
-  if (dx > 0) {
-    Serial.print("Moving EAST ");
-    Serial.print(dx);
-    Serial.println(" step(s)");
-    turnToDirection(EAST);
-    moveSteps(dx);
-  }
+  bool turning = currentDirection != neededDirection;
 
-  else if (dx < 0) {
-    Serial.print("Moving WEST ");
-    Serial.print(-dx);
-    Serial.println(" step(s)");
-    turnToDirection(WEST);
-    moveSteps(-dx);
+  turnToDirection(neededDirection);
+
+  if (!turning) {
+    clearIntersection();
   }
-
-  currentLocation = targetLocation;
-
-  Serial.print("Arrived at intersection ");
-  Serial.println(currentLocation);
 }
-  
-//-------------------------DELIVERY ACTION------------------------
+
+void handleReachedIntersection() {
+  stopRobot();
+  delay(800);
+
+  Coordinate nextStep = getNextStepToward(currentPos, currentTarget);
+  currentPos = nextStep;
+
+  Serial.print("Reached: (");
+  Serial.print(currentPos.x);
+  Serial.print(",");
+  Serial.print(currentPos.y);
+  Serial.println(")");
+
+  if (sameCoordinate(currentPos, currentTarget)) {
+    Serial.println("Reached target.");
+    stopRobot();
+
+    if (currentState == MOVING_TO_TARGET) {
+      currentState = DELIVERING;
+    }
+    else if (currentState == RETURN_HOME) {
+      Serial.println("Returned home.");
+      currentState = ADD_DELIVERY;
+    }
+
+    return;
+  }
+
+  prepareNextMovement();
+}
+
+// ---------------- DELIVERY ACTION ----------------
 void performDelivery() {
+  digitalWrite(13, HIGH);
   stopRobot();
 
-  Serial.print("Delivering at intersection ");
-  Serial.println(currentLocation);
+  Serial.print("Delivering at: (");
+  Serial.print(currentPos.x);
+  Serial.print(",");
+  Serial.print(currentPos.y);
+  Serial.println(")");
 
   delay(2000);
 
-  Serial.println("Delivery complete");
+  Serial.println("Delivery complete.");
+  digitalWrite(13, LOW);
 }
 
-//--------------------------MAIN LOOP-----------------------------
-void loop () {
-  checkForRequests();
-
+// ---------------- MAIN LOOP ----------------
+void loop() {
   switch (currentState) {
-    case IDLE:
-      if (queueSize > 0) {
-        int nextIndex = chooseNextRequest();
-        currentTarget = requestQueue[nextIndex].location;
-        removeRequest(nextIndex);
 
-        Serial.print("Chosen next target: ");
-        Serial.println(currentTarget);
+    case ADD_DELIVERY:
+      checkForQueueInput();
 
-        currentState = MOVING_TO_TARGET;
+      if (startButtonPressed()) {
+        if (queueSize > 0) {
+          Serial.println("Starting deliveries.");
+          currentTarget = dequeue();
+          hasTarget = true;
+          currentState = MOVING_TO_TARGET;
+          prepareNextMovement();
+        }
+        else {
+          Serial.println("No deliveries in queue.");
+        }
       }
       break;
 
     case MOVING_TO_TARGET:
-      goToLocation(currentTarget);
-      currentState = DELIVERING;
+      followLineSimple();
+
+      if (checkIntersectionEvent()) {
+        handleReachedIntersection();
+      }
       break;
 
     case DELIVERING:
       performDelivery();
 
       if (queueSize > 0) {
-        currentState = IDLE;
+        currentTarget = dequeue();
+        currentState = MOVING_TO_TARGET;
+        prepareNextMovement();
       }
       else {
-        currentState = RETURNING_HOME;
+        Serial.println("Queue empty. Returning home.");
+        currentTarget = homePos;
+        currentState = RETURN_HOME;
+        prepareNextMovement();
       }
       break;
 
-    case RETURNING_HOME:
-      if (currentLocation != 0){
-        Serial.println("Queue empty. Returning to hub.");
-        goToLocation(0);
+    case RETURN_HOME:
+      followLineSimple();
+
+      if (checkIntersectionEvent()) {
+        handleReachedIntersection();
       }
-      currentTarget = -1;
-      currentState = IDLE;
       break;
   }
+
+  delay(10);
 }
