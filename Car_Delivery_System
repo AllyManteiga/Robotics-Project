@@ -350,18 +350,18 @@ void turnLeftCommitted() {
   delay(150);
 
   moveForward(150, 150);
-  delay(350);
+  delay(350); //values to be messed with
   stopRobot();
   delay(150);
 
   turnLeft(180, 180);
-  delay(1800);
+  delay(775); //values to be messed with
   stopRobot();
   delay(100);
 
   unsigned long startTime = millis();
 
-  while (!middleOnLine() && millis() - startTime < 2000) {
+  while (!middleOnLine() && millis() - startTime < 1500) {
     turnLeft(120, 120);
   }
 
@@ -385,12 +385,12 @@ void turnRightCommitted() {
   delay(150);
 
   moveForward(150, 150);
-  delay(350);
+  delay(350); //values to be messed with
   stopRobot();
   delay(150);
 
   turnRight(180, 180);
-  delay(1800);
+  delay(775); //values to be messed with
   stopRobot();
   delay(100);
 
@@ -420,7 +420,7 @@ void turnAroundCommitted() {
   delay(150);
 
   turnLeft(170, 170);
-  delay(3000);
+  delay(1500);
   stopRobot();
   delay(100);
 
